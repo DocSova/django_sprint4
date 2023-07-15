@@ -89,7 +89,11 @@ class Post(BaseModel):
         related_name='categories',
         verbose_name='Категория'
     )
-    image = models.ImageField('Изображение', upload_to='blog_images', blank=True)
+    image = models.ImageField(
+        'Изображение',
+        upload_to='blog_images',
+        blank=True
+    )
 
     class Meta:
         verbose_name = 'публикация'
@@ -99,6 +103,7 @@ class Post(BaseModel):
     def __str__(self):
         return (f'{self.title[:ADMIN_MODEL_TITLE_CUT]}'
                 f'{self.title[ADMIN_MODEL_TITLE_CUT:] and ".."}')
+
 
 class Comment(BaseModel):
     text = models.TextField('Текст')
