@@ -69,7 +69,7 @@ def index(request):
     page_obj = init_paginator(request, posts_queryset)
     context = {
         'page_obj': page_obj
-        }
+    }
     return render(request, template, context)
 
 
