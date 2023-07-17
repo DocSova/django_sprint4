@@ -4,7 +4,7 @@ from django.utils import timezone
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.core.paginator import Paginator
 
 from blog.models import Post, Category, Comment
@@ -222,13 +222,11 @@ def profile(request, username):
     template = 'blog/profile.html'
     profile = get_object_or_404(User, is_active=True, username=username)
 
-    post_filter = Q(author=profile)
+    posts_queryset = POSTS_ALL.filter(author=profile)
     if (request.user != profile):
-        post_filter &= Q(
-            category__is_published=True,
-            pub_date__lte=timezone.now()
-        )
-    posts_queryset = POSTS_ALL.filter(post_filter).annotate(
+        posts_queryset = posts_queryset.filter(category__is_published=True,
+                                               pub_date__lte=timezone.now())
+    posts_queryset = posts_queryset.annotate(
         comment_count=Count('comments')
     ).order_by('-pub_date')
     page_obj = init_paginator(request, posts_queryset)
