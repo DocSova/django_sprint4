@@ -87,9 +87,9 @@ def post_detail(request, post_id):
 
     print(post.category, post.is_published, post.pub_date)
 
-    if ((request.user != post.author) and
-       (not (post.pub_date <= timezone.now()) or
-       not post.is_published or not post.category.is_published)):
+    if ((request.user != post.author)
+       and (not (post.pub_date <= timezone.now())
+       or not post.is_published or not post.category.is_published)):
         raise Http404(f'Пост с id {post_id} не найден!')
 
     comments = COMMENTS_ALL.filter(post__id=post_id)
