@@ -28,19 +28,21 @@ def check_author(view_func):
     текущий пользователь автором поста или комментария."""
     def wrapper(request, *args, **kwargs):
         post_id = kwargs.get('post_id')
+        if not request.user.is_authenticated:
+            return redirect('blog:post_detail', post_id)
+
         comment_id = kwargs.get('comment_id')
         post_object = get_object_or_404(Post, pk=post_id)
-        if (post_object is not None):
-            if (comment_id is not None):
-                comment_object = get_object_or_404(
-                    COMMENTS_ALL,
-                    id=comment_id,
-                    post__id=post_id
-                )
-                if (comment_object.author != request.user):
-                    return redirect('blog:post_detail', post_id)
-            elif (post_object.author != request.user):
+        if comment_id is not None:
+            comment_object = get_object_or_404(
+                COMMENTS_ALL,
+                id=comment_id,
+                post__id=post_id
+            )
+            if (comment_object.author != request.user):
                 return redirect('blog:post_detail', post_id)
+        elif (post_object.author != request.user):
+            return redirect('blog:post_detail', post_id)
 
         return view_func(request, *args, **kwargs)
     return wrapper
@@ -54,7 +56,7 @@ def init_paginator(request, queryset):
     return paginator.get_page(page_number)
 
 
-def get_posts_with_ct():
+def get_posts_with_current_time():
     """Функция возвращает публикации,
     учитывая фильтр по текущему времени и дате публикации."""
     return POSTS_PUBLISHED.filter(
@@ -65,7 +67,7 @@ def get_posts_with_ct():
 def index(request):
     """Функция отображения главной страницы с постами."""
     template = 'blog/index.html'
-    posts_queryset = get_posts_with_ct()
+    posts_queryset = get_posts_with_current_time()
     page_obj = init_paginator(request, posts_queryset)
     context = {
         'page_obj': page_obj
@@ -76,31 +78,27 @@ def index(request):
 def post_detail(request, post_id):
     """Функция отображения поста в блоге под конкретным id."""
 
-    post_filter = Q(id=post_id)
-    post = POSTS_ALL.filter(post_filter)
+    post_queryset = POSTS_ALL.filter(id=post_id)
 
-    if not post.exists():
-        raise Http404()
+    if not post_queryset.exists():
+        raise Http404(f'Пост с id {post_id} не найден!')
 
-    if request.user != post.first().author:
-        post_filter &= Q(
-            is_published=True,
-            pub_date__lte=timezone.now(),
-            category__is_published=True
-        )
+    post = post_queryset.first()
 
-    post = post.filter(post_filter)
+    print(post.category, post.is_published, post.pub_date)
 
-    if not post.exists():
-        raise Http404()
+    if ((request.user != post.author) and
+       (not (post.pub_date <= timezone.now()) or
+       not post.is_published or not post.category.is_published)):
+        raise Http404(f'Пост с id {post_id} не найден!')
 
     comments = COMMENTS_ALL.filter(post__id=post_id)
 
     template = 'blog/detail.html'
     context = {
-        'post': post.first(),
+        'post': post,
         'comments': comments,
-        'form': CommentForm(None)
+        'form': CommentForm()
     }
     return render(request, template, context)
 
@@ -109,14 +107,13 @@ def post_detail(request, post_id):
 def delete_comment(request, post_id, comment_id):
     template = 'blog/comment.html'
 
-    instance = COMMENTS_ALL.get(
+    instance = get_object_or_404(
+        COMMENTS_ALL,
         id=comment_id,
         post__id=post_id
     )
-    if instance is None:
-        raise Http404(f'Комментарий с id {comment_id} не найден!')
 
-    if (request.method == 'POST'):
+    if request.method == 'POST':
         instance.delete()
         return redirect('blog:post_detail', post_id)
 
@@ -150,12 +147,12 @@ def edit_comment(request, post_id, comment_id):
 
 @login_required
 def add_comment(request, post_id):
-    get_object_or_404(Post, pk=post_id)
-    form = CommentForm(request.POST or None)
+    post = get_object_or_404(Post, pk=post_id)
+    form = CommentForm(request.POST)
     if form.is_valid():
         new_comment = form.save(commit=False)
         new_comment.author = request.user
-        new_comment.post = Post.objects.get(pk=post_id)
+        new_comment.post = post
         new_comment.save()
     return redirect('blog:post_detail', post_id)
 
@@ -164,12 +161,11 @@ def add_comment(request, post_id):
 def delete_post(request, post_id):
     template = 'blog/create.html'
     instance = get_object_or_404(Post, pk=post_id)
-    if (request.method == 'POST'):
+    if request.method == 'POST':
         instance.delete()
         return redirect('blog:index')
 
-    form = PostForm(request.POST or None, instance=instance)
-    context = {'form': form}
+    context = {'instance': instance}
 
     return render(request, template, context)
 
@@ -209,10 +205,11 @@ def create_post(request):
     return render(request, template, context)
 
 
-def edit_profile(request, login_id):
+@login_required
+def edit_profile(request, username):
     template = 'blog/user.html'
-    if (login_id != request.user.username):
-        return redirect('blog:profile', login_id)
+    if username != request.user.username:
+        return redirect('blog:profile', username)
     instance = get_object_or_404(User, username=request.user)
     form = UserEditProfileForm(request.POST or None, instance=instance)
     context = {'form': form}
@@ -221,9 +218,9 @@ def edit_profile(request, login_id):
     return render(request, template, context)
 
 
-def profile(request, login_id):
+def profile(request, username):
     template = 'blog/profile.html'
-    profile = get_object_or_404(User, is_active=True, username=login_id)
+    profile = get_object_or_404(User, is_active=True, username=username)
 
     post_filter = Q(author=profile)
     if (request.user != profile):
@@ -245,18 +242,14 @@ def profile(request, login_id):
 def category_posts(request, category_slug):
     """Функция отображения постов в категории."""
     template = 'blog/category.html'
-    category = Category.objects.values(
-        'title',
-        'description'
-    )
 
     category = get_object_or_404(
-        category,
+        Category.objects.values('id', 'title', 'description'),
         slug=category_slug,
         is_published=True
     )
-    posts_queryset = get_posts_with_ct().filter(
-        category__slug=category_slug
+    posts_queryset = get_posts_with_current_time().filter(
+        category_id=category["id"]
     )
     page_obj = init_paginator(request, posts_queryset)
     context = {
