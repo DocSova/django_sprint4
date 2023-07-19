@@ -78,21 +78,14 @@ def index(request):
 def post_detail(request, post_id):
     """Функция отображения поста в блоге под конкретным id."""
 
-    post_queryset = POSTS_ALL.filter(id=post_id)
+    post = get_object_or_404(POSTS_ALL, id=post_id)
 
-    if not post_queryset.exists():
-        raise Http404(f'Пост с id {post_id} не найден!')
+    if request.user != post.author:
+        post = get_object_or_404(POSTS_PUBLISHED, id=post_id)
+        if not (post.pub_date <= timezone.now()):
+            raise Http404(f'Пост с id {post_id} не найден!')
 
-    post = post_queryset.first()
-
-    print(post.category, post.is_published, post.pub_date)
-
-    if ((request.user != post.author)
-       and (not (post.pub_date <= timezone.now())
-       or not post.is_published or not post.category.is_published)):
-        raise Http404(f'Пост с id {post_id} не найден!')
-
-    comments = COMMENTS_ALL.filter(post__id=post_id)
+    comments = COMMENTS_ALL.filter(post_id=post_id)
 
     template = 'blog/detail.html'
     context = {
@@ -110,7 +103,7 @@ def delete_comment(request, post_id, comment_id):
     instance = get_object_or_404(
         COMMENTS_ALL,
         id=comment_id,
-        post__id=post_id
+        post_id=post_id
     )
 
     if request.method == 'POST':
@@ -130,7 +123,7 @@ def edit_comment(request, post_id, comment_id):
     instance = get_object_or_404(
         COMMENTS_ALL,
         id=comment_id,
-        post__id=post_id
+        post_id=post_id
     )
 
     form = CommentForm(request.POST or None, instance=instance)
@@ -210,8 +203,8 @@ def edit_profile(request, username):
     template = 'blog/user.html'
     if username != request.user.username:
         return redirect('blog:profile', username)
-    instance = get_object_or_404(User, username=request.user)
-    form = UserEditProfileForm(request.POST or None, instance=instance)
+    user_data = get_object_or_404(User, username=request.user)
+    form = UserEditProfileForm(request.POST or None, instance=user_data)
     context = {'form': form}
     if form.is_valid():
         form.save()
@@ -223,7 +216,7 @@ def profile(request, username):
     profile = get_object_or_404(User, is_active=True, username=username)
 
     posts_queryset = POSTS_ALL.filter(author=profile)
-    if (request.user != profile):
+    if request.user != profile:
         posts_queryset = posts_queryset.filter(category__is_published=True,
                                                pub_date__lte=timezone.now())
     posts_queryset = posts_queryset.annotate(
@@ -242,10 +235,11 @@ def category_posts(request, category_slug):
     template = 'blog/category.html'
 
     category = get_object_or_404(
-        Category.objects.values('id', 'title', 'description'),
+        Category.objects.values(),
         slug=category_slug,
         is_published=True
     )
+
     posts_queryset = get_posts_with_current_time().filter(
         category_id=category["id"]
     )

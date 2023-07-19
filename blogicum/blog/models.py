@@ -7,6 +7,11 @@ ADMIN_MODEL_COMMENT_CUT = 50
 User = get_user_model()
 
 
+def get_formatted_description(title, letter_count):
+    return (f'{title[:letter_count]}'
+            f'{title[letter_count:] and ".."}')
+
+
 class BaseModel(models.Model):
     is_published = models.BooleanField(
         'Опубликовано',
@@ -36,8 +41,7 @@ class Category(BaseModel):
     )
 
     def __str__(self):
-        return (f'{self.title[:ADMIN_MODEL_TITLE_CUT]}'
-                f'{self.title[ADMIN_MODEL_TITLE_CUT:] and ".."}')
+        return get_formatted_description(self.title, ADMIN_MODEL_TITLE_CUT)
 
     class Meta:
         verbose_name = 'категория'
@@ -55,8 +59,7 @@ class Location(BaseModel):
         verbose_name_plural = 'Местоположения'
 
     def __str__(self):
-        return (f'{self.name[:ADMIN_MODEL_TITLE_CUT]}'
-                f'{self.name[ADMIN_MODEL_TITLE_CUT:] and ".."}')
+        return get_formatted_description(self.name, ADMIN_MODEL_TITLE_CUT)
 
 
 class Post(BaseModel):
@@ -101,8 +104,7 @@ class Post(BaseModel):
         ordering = ('-pub_date',)
 
     def __str__(self):
-        return (f'{self.title[:ADMIN_MODEL_TITLE_CUT]}'
-                f'{self.title[ADMIN_MODEL_TITLE_CUT:] and ".."}')
+        return get_formatted_description(self.title, ADMIN_MODEL_TITLE_CUT)
 
 
 class Comment(BaseModel):
@@ -124,5 +126,4 @@ class Comment(BaseModel):
         verbose_name_plural = 'Комментарии'
 
     def __str__(self):
-        return (f'{self.text[:ADMIN_MODEL_COMMENT_CUT]}'
-                f'{self.text[ADMIN_MODEL_COMMENT_CUT:] and ".."}')
+        return get_formatted_description(self.text, ADMIN_MODEL_COMMENT_CUT)
