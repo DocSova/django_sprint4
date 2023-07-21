@@ -85,7 +85,7 @@ def post_detail(request, post_id):
        or not post.is_published or not post.category.is_published)):
         raise Http404(f'Пост с id {post_id} не найден!')
 
-    comments = COMMENTS_ALL.filter(post_id=post_id)
+    comments = post.comments.all()
 
     template = 'blog/detail.html'
     context = {
@@ -203,7 +203,7 @@ def edit_profile(request, username):
     template = 'blog/user.html'
     if username != request.user.username:
         return redirect('blog:profile', username)
-    user_data = get_object_or_404(User, username=request.user)
+    user_data = get_object_or_404(User, username=username)
     form = UserEditProfileForm(request.POST or None, instance=user_data)
     context = {'form': form}
     if form.is_valid():
@@ -235,13 +235,13 @@ def category_posts(request, category_slug):
     template = 'blog/category.html'
 
     category = get_object_or_404(
-        Category.objects.values(),
+        Category,
         slug=category_slug,
         is_published=True
     )
 
     posts_queryset = get_posts_with_current_time().filter(
-        category_id=category["id"]
+        category_id=category.id
     )
     page_obj = init_paginator(request, posts_queryset)
     context = {
